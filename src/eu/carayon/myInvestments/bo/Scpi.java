@@ -1,24 +1,13 @@
-package eu.carayon;
+package eu.carayon.myInvestments.bo;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Scanner;
-import java.lang.reflect.Type;
-
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 
 public class Scpi {
     private static final long DAY_WORTH = 1000L * 60 * 60 * 24;
     private static final long MONTH_WORTH = DAY_WORTH * 30;
-    private static final long YEAR_WORTH = MONTH_WORTH * 12;
-    private static final String SAVE_FILENAME = "mesScpi.json";
-    public static List<Scpi> mesScpi = new ArrayList<>();
-    protected static Gson gson = new Gson();
+
     protected String nom;
     protected String organisme;
     protected byte frequency;
@@ -32,75 +21,6 @@ public class Scpi {
         this.organisme = organisme;
         this.frequency = frequency;
         this.delay = delay;
-        Scpi.mesScpi.add(this);
-    }
-
-    public static void save() {
-        try (FileWriter fw = new FileWriter(SAVE_FILENAME)) {
-            fw.write(gson.toJson(Scpi.mesScpi));
-        } catch (IOException e) {
-            System.out.println("Erreur lors de la création du fichier de sauvegarde de mes SCPI");
-            e.printStackTrace();
-        }
-    }
-
-    public static void load() {
-        try (Scanner s = new Scanner(new File(SAVE_FILENAME))) {
-            Scpi.mesScpi.clear();
-            String json = s.useDelimiter("\\A").next();
-            Type listType = new TypeToken<ArrayList<Scpi>>() {}.getType();
-            Scpi.mesScpi = gson.fromJson(json, listType);
-        } catch (Exception e) {
-            System.out.println("Erreur lors du chargement du fichier de sauvegarde de mes SCPI");
-            e.printStackTrace();
-        }
-    }
-
-    public static Scpi get(int index) {
-        return mesScpi.get(index);
-    }
-
-    public static int getTotalInvested() {
-        int total = 0;
-        for (Scpi scpi : mesScpi) {
-            total += scpi.getInvested();
-        }
-        return total;
-    }
-
-    public static int getAverageMonthlyTotalDistribution() {
-        int answer = 0;
-        for (Scpi scpi : mesScpi) {
-            answer += scpi.getAverageMonthlyDistribution();
-        }
-        return answer;
-    }
-
-    public static float getTotalYearlyYield() {
-        return getTotalYearlyYield(false);
-    }
-    public static float getTotalYearlyYield(boolean includeDelay) {
-        float total = 0;
-        for (Scpi scpi : mesScpi) {
-            total += scpi.getYearlyYield(includeDelay) * scpi.getInvested() / getTotalInvested();
-        }
-        return total;
-    }
-
-    public static float getTotalAverageYearlyYield() {
-        float total = 0;
-        for (Scpi scpi : mesScpi) {
-            total += scpi.getYearlyYield(false);
-        }
-        return total / mesScpi.size();
-    }
-
-    public static float getTotalRealYearlyYield() {
-        float total = 0;
-        for (Scpi scpi : mesScpi) {
-            total += scpi.getRealYearlyYield() * scpi.getInvested() / getTotalInvested();
-        }
-        return total;
     }
 
     public Scpi clone() {

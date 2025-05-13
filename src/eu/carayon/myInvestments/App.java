@@ -1,4 +1,4 @@
-package eu.carayon;
+package eu.carayon.myInvestments;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -10,11 +10,16 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import eu.carayon.myInvestments.bll.ScpiManager;
+import eu.carayon.myInvestments.bo.DatedAmount;
+import eu.carayon.myInvestments.bo.Scpi;
+
 public class App {
     private static Scanner s = new Scanner(System.in);
+    private static ScpiManager scpiManager = ScpiManager.getInstance();
 
     public static void main(String[] args) throws IOException {
-        Scpi.load();
+        scpiManager.load();
         mainMenu();
     }
 
@@ -22,16 +27,16 @@ public class App {
         String choice = "";
         do {
             listScpi();
-            choice = userInput("Choisissez une action : [a]jouter une SCPI, sélectionner la SCPI d'index X avec [sX] ou [q]uitter", Stream.concat(IntStream.rangeClosed(0, Scpi.mesScpi.size() - 1).mapToObj(o -> "s" + o), Stream.of("a", "q")).collect(Collectors.toSet()));
+            choice = userInput("Choisissez une action : [a]jouter une SCPI, sélectionner la SCPI d'index X avec [sX] ou [q]uitter", Stream.concat(IntStream.rangeClosed(0, scpiManager.getAllScpis().size() - 1).mapToObj(o -> "s" + o), Stream.of("a", "q")).collect(Collectors.toSet()));
             if (choice.substring(0, 1).equals("s")) {
                 byte selectedIndex = Byte.parseByte(choice.substring(1));
-                if (selectedIndex > Scpi.mesScpi.size() - 1) {System.out.println("Index de SCPI invalide.");} else {
-                    interactWithScpiMenu(Scpi.get((selectedIndex)));
+                if (selectedIndex > scpiManager.getAllScpis().size() - 1) {System.out.println("Index de SCPI invalide.");} else {
+                    interactWithScpiMenu(scpiManager.get(selectedIndex));
                 };
             } else if (choice.equals("a")) {
                     System.out.println("Entrez le nom de l'organisme, le nom de la SCPI, la fréquence des loyers et le délai de jouissance.");
                     new Scpi(s.nextLine(), s.nextLine(), Byte.parseByte(s.nextLine()), Byte.parseByte(s.nextLine()));
-                    Scpi.save(); 
+                    scpiManager.save(); 
             }
         }
         while (!choice.equals("q"));
@@ -74,7 +79,7 @@ public class App {
                         scpi.addToType(type, new DatedAmount(
                             (new SimpleDateFormat("dd/MM/yyyy")).parse(s.nextLine())
                             , (int) (Float.parseFloat(s.nextLine()) * 100)));
-                            Scpi.save();
+                            scpiManager.save();
                     } catch (ParseException e) {
                         e.printStackTrace();
                     }
@@ -85,7 +90,7 @@ public class App {
                         type,
                         Byte.parseByte(userInput(
                             "Entrez l'index de l'élément à supprimer.",
-                            IntStream.rangeClosed(0, Scpi.mesScpi.size()).mapToObj(String::valueOf).collect(Collectors.toSet())
+                            IntStream.rangeClosed(0, scpiManager.getAllScpis().size()).mapToObj(String::valueOf).collect(Collectors.toSet())
                         ))
                     );
                     break;
@@ -100,13 +105,13 @@ public class App {
         System.out.println("├───────┼───────────────────────────────┼─────────┼───────┼───────────────────┼────────────────┼───────────┼────────────────┤");
         byte i = 0;
         Collections.sort(
-            Scpi.mesScpi,
+            scpiManager.getAllScpis(),
             new Comparator<Scpi>() {
                 public int compare(Scpi scpi1, Scpi scpi2) {
                     return scpi2.getInvested() - scpi1.getInvested();
                 }
             });
-        for (Scpi scpi : Scpi.mesScpi) {
+        for (Scpi scpi : scpiManager.getAllScpis()) {
             System.out.print('│');
             // if (i % 2 == 1) System.out.print("\u001B[44m");
             if (i % 2 == 1) System.out.print("\u001B[48;5;235m");
@@ -115,7 +120,7 @@ public class App {
                 i++,
                 scpi.getOrganism() + ' ' + scpi.getName(),
                 String.format("%.0f k€", scpi.getInvested() / 100000.0),
-                (int)((float) scpi.getInvested() / (float) Scpi.getTotalInvested() * 100.0),
+                (int)((float) scpi.getInvested() / (float) scpiManager.getTotalInvested() * 100.0),
                 scpi.getAverageMonthlyDistribution() == 0 ? "" : String.format("%.2f €",  scpi.getAverageMonthlyDistribution() / 100.0),
                 scpi.getYearlyYield() == 0 ? "" : (String.format("%.2f %%", scpi.getYearlyYield() * 100)),
                 scpi.getBreakEven(),
@@ -126,10 +131,10 @@ public class App {
         System.out.println(String.format(
             "│       │ %-29s │ %7s │       │ %17s │ %14s │  en mois  │ %14s │",
             "Toutes les SCPI",
-            String.format("%.0f k€", Scpi.getTotalInvested() / 100000.0),
-            Scpi.getAverageMonthlyTotalDistribution() == 0 ? "" : String.format("%.2f €",  Scpi.getAverageMonthlyTotalDistribution() / 100.0),
-            Scpi.getTotalYearlyYield() == 0 ? "" : String.format("%.2f %%", Scpi.getTotalYearlyYield() * 100),
-            String.format("%.2f %%", Scpi.getTotalRealYearlyYield() * 100)
+            String.format("%.0f k€", scpiManager.getTotalInvested() / 100000.0),
+            scpiManager.getAverageMonthlyTotalDistribution() == 0 ? "" : String.format("%.2f €",  scpiManager.getAverageMonthlyTotalDistribution() / 100.0),
+            scpiManager.getTotalYearlyYield() == 0 ? "" : String.format("%.2f %%", scpiManager.getTotalYearlyYield() * 100),
+            String.format("%.2f %%", scpiManager.getTotalRealYearlyYield() * 100)
         ));
     System.out.println("\u001B[0m" + "└───────┴───────────────────────────────┴─────────┴───────┴───────────────────┴────────────────┴───────────┴────────────────┘");
     }    
