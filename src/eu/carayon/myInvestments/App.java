@@ -1,25 +1,33 @@
 package eu.carayon.myInvestments;
+
 import java.io.IOException;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Collections;
-import java.util.Comparator;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Scanner;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import eu.carayon.myInvestments.bll.ScpiManager;
-import eu.carayon.myInvestments.bo.DatedAmount;
-import eu.carayon.myInvestments.bo.Scpi;
+import eu.carayon.myInvestments.bll.EventService;
+import eu.carayon.myInvestments.bll.InvestmentService;
+import eu.carayon.myInvestments.bll.PortfolioService;
+import eu.carayon.myInvestments.bo.Event;
+import eu.carayon.myInvestments.bo.EventType;
+import eu.carayon.myInvestments.bo.Investment;
 
 public class App {
     private static Scanner s = new Scanner(System.in);
-    private static ScpiManager scpiManager = ScpiManager.getInstance();
+    private static PortfolioService portfolioService = new PortfolioService();
+
 
     public static void main(String[] args) throws IOException {
-        scpiManager.load();
+        try {
+            portfolioService.load();
+        } catch (Exception e) {
+            System.out.println("Problème\n" + e.getMessage());
+        }
         mainMenu();
     }
 
@@ -27,126 +35,178 @@ public class App {
         String choice = "";
         do {
             listScpi();
-            choice = userInput("Choisissez une action : [a]jouter une SCPI, sélectionner la SCPI d'index X avec [sX] ou [q]uitter", Stream.concat(IntStream.rangeClosed(0, scpiManager.getAllScpis().size() - 1).mapToObj(o -> "s" + o), Stream.of("a", "q")).collect(Collectors.toSet()));
+            choice = userInput(
+                    "Choisissez une action : [a]jouter une SCPI, sélectionner la SCPI d'index X avec [sX] ou [q]uitter",
+                    Stream.concat(IntStream.rangeClosed(0, portfolioService.getInvestmentServices().size() - 1)
+                            .mapToObj(o -> "s" + o), Stream.of("a", "q")).collect(Collectors.toSet()));
             if (choice.substring(0, 1).equals("s")) {
-                byte selectedIndex = Byte.parseByte(choice.substring(1));
-                if (selectedIndex > scpiManager.getAllScpis().size() - 1) {System.out.println("Index de SCPI invalide.");} else {
-                    interactWithScpiMenu(scpiManager.get(selectedIndex));
-                };
+                int selectedIndex = Integer.parseInt(choice.substring(1));
+                if (selectedIndex > portfolioService.getInvestmentServices().size() - 1) {
+                    System.out.println("Index de SCPI invalide.");
+                } else {
+                    try {
+                        interactWithScpiMenu(portfolioService.getInvestmentService(selectedIndex));
+                    } catch (Exception e) {
+                        System.out.println("Problème\n" + e.getMessage());
+                    }
+                }
+                ;
             } else if (choice.equals("a")) {
-                    System.out.println("Entrez le nom de l'organisme, le nom de la SCPI, la fréquence des loyers et le délai de jouissance.");
-                    new Scpi(s.nextLine(), s.nextLine(), Byte.parseByte(s.nextLine()), Byte.parseByte(s.nextLine()));
-                    scpiManager.save(); 
+                System.out.println("Entrez le nom de l'organisme.");
+                String organism = s.nextLine();
+                System.out.println("Entrez le nom du produit.");
+                String name = s.nextLine();
+                System.out.println(
+                        "Entrez la fréquence de distribution (1 pour mensuel, 3 pour trimestriel, 12 pour annuel…).");
+                int frequency = Integer.parseInt(s.nextLine());
+                System.out.println("Entrez le délai de jouissance.");
+                int delay = Integer.parseInt(s.nextLine());
+
+                portfolioService.addInvestment(new Investment(name, organism, frequency, delay, null));
+                try {
+                    portfolioService.save();
+                } catch (Exception e) {
+                    System.out.println("Problème d'enregistrement du portfolio\n" + e.getMessage());
+                }
             }
-        }
-        while (!choice.equals("q"));
+        } while (!choice.equals("q"));
     }
 
-    private static void interactWithScpiMenu(Scpi scpi) {
-        System.out.println(scpi.getOrganism() + " " + scpi.getName());
+    private static void interactWithScpiMenu(InvestmentService investmentService) {
+        System.out.println(
+                investmentService.getInvestment().getOrganism() + " " + investmentService.getInvestment().getName());
         String choice = "";
         do {
-            choice = userInput("Avec quoi voulez-vous interagir ? [m]ouvements, [l]oyers, [v]alorisations, [q]uitter", Set.of("m", "l", "v", "q"));
+            choice = userInput("Avec quoi voulez-vous interagir ? [m]ouvements, [l]oyers, [v]alorisations, [q]uitter",
+                    Set.of("m", "l", "v", "q"));
             switch (choice) {
                 case "m":
-                    scpiTypeMenu(scpi, "mouvements");
+                    scpiTypeMenu(investmentService, EventType.MOVEMENT);
                     break;
-            
+
                 case "l":
-                    scpiTypeMenu(scpi, "distributions");
+                    scpiTypeMenu(investmentService, EventType.DISTRIBUTION);
                     break;
-            
+
                 case "v":
-                    scpiTypeMenu(scpi, "valorisations");
+                    scpiTypeMenu(investmentService, EventType.VALUATION);
                     break;
             }
-        }
-        while (!choice.equals("q"));
+        } while (!choice.equals("q"));
     }
 
-    private static void scpiTypeMenu(Scpi scpi, String type) {
+    private static void scpiTypeMenu(InvestmentService investmentService, EventType type) {
         String choice = "";
         do {
-        byte index = 0;
-        for (DatedAmount datedAmount : scpi.getFromType(type)) {
-            System.out.println(String.valueOf(index++) + ") " + datedAmount);
-        }
-            choice = userInput("Que voulez-vous faire avec les " + type + " ? [a]jouter, [s]upprimer, [q]uitter", Set.of("a", "s", "q"));
+            int index = 0;
+            for (Event event : investmentService.getEventsFromType(type)) {
+                System.out.println(String.format("%d) %s : %.2f €", index++, event.getDate().toString(),
+                        (float) event.getAmount() / 100));
+            }
+            choice = userInput(
+                    "Que voulez-vous faire avec les " + type.label.toLowerCase()
+                            + "s ? [a]jouter, [s]upprimer, [q]uitter",
+                    Set.of("a", "s", "q"));
             switch (choice) {
                 case "a":
+                    int amount;
+                    LocalDate date;
+                    System.out.println("Entrez la date (dd/MM/yyyy)");
+                    date = LocalDate.parse(s.nextLine(), DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+                    System.out.println("Entrez le montant.");
+                    amount = (int) (Float.parseFloat(s.nextLine()) * 100);
+                    Event event = new Event();
+                    event.setAmount(amount);
+                    event.setDate(date);
+                    event.setType(type);
                     try {
-                        System.out.println("Entrez la date (dd/MM/yyyy), puis le montant.");
-                        scpi.addToType(type, new DatedAmount(
-                            (new SimpleDateFormat("dd/MM/yyyy")).parse(s.nextLine())
-                            , (int) (Float.parseFloat(s.nextLine()) * 100)));
-                            scpiManager.save();
-                    } catch (ParseException e) {
-                        e.printStackTrace();
+                        new EventService(event);
+                    } catch (Exception e) {
+                        System.out.println("Problème\n" + e.getMessage());
+                    }
+                    investmentService.addEvent(event);
+                    try {
+                        investmentService.save();
+                    } catch (Exception e) {
+                        System.out.println("Problème\n" + e.getMessage());
                     }
                     break;
 
                 case "s":
-                    scpi.removeFromType(
-                        type,
-                        Byte.parseByte(userInput(
-                            "Entrez l'index de l'élément à supprimer.",
-                            IntStream.rangeClosed(0, scpiManager.getAllScpis().size()).mapToObj(String::valueOf).collect(Collectors.toSet())
-                        ))
-                    );
+                    List<Event> eventList = investmentService.getEventsFromType(type);
+                    int indexToRemove = Integer.parseInt(
+                            userInput(
+                                    "Entrez l'index de l'élément à supprimer.",
+                                    IntStream.rangeClosed(0, portfolioService.getInvestmentServices().size())
+                                            .mapToObj(String::valueOf).collect(Collectors.toSet())));
+                    investmentService.removeEvent(eventList.get(indexToRemove));
                     break;
             }
-        }
-        while (!choice.equals("q"));
+        } while (!choice.equals("q"));
     }
 
     private static void listScpi() {
-        System.out.println("┌───────┬───────────────────────────────┬─────────┬───────┬───────────────────┬────────────────┬───────────┬────────────────┐");
-        System.out.println("│ Index │ Nom                           │ Investi │ Poids │ Loyer mens. moyen │ Rendement moy. │ BreakEven │ Rendement réel │");
-        System.out.println("├───────┼───────────────────────────────┼─────────┼───────┼───────────────────┼────────────────┼───────────┼────────────────┤");
-        byte i = 0;
-        Collections.sort(
-            scpiManager.getAllScpis(),
-            new Comparator<Scpi>() {
-                public int compare(Scpi scpi1, Scpi scpi2) {
-                    return scpi2.getInvested() - scpi1.getInvested();
-                }
-            });
-        for (Scpi scpi : scpiManager.getAllScpis()) {
+        System.out.println(
+                "┌───────┬───────────────────────────────┬─────────┬───────┬───────────────────┬────────────────┬───────────┬────────────────┐");
+        System.out.println(
+                "│ Index │ Nom                           │ Investi │ Poids │ Loyer mens. moyen │ Rendement moy. │ BreakEven │ Rendement réel │");
+        System.out.println(
+                "├───────┼───────────────────────────────┼─────────┼───────┼───────────────────┼────────────────┼───────────┼────────────────┤");
+        int i = 0;
+        try {
+            portfolioService.sort();
+        } catch (Exception e) {
+            System.out.println("Problème\n" + e.getMessage());
+        }
+        for (InvestmentService investmentService : portfolioService.getInvestmentServices()) {
             System.out.print('│');
             // if (i % 2 == 1) System.out.print("\u001B[44m");
-            if (i % 2 == 1) System.out.print("\u001B[48;5;235m");
+            if (i % 2 == 1)
+                System.out.print("\u001B[48;5;235m");
             System.out.println(String.format(
-                " %5d │ %-29s │ %7s │ %3d %% │ %17s │ %14s │ %9s │ %14s \u001B[0m│",
-                i++,
-                scpi.getOrganism() + ' ' + scpi.getName(),
-                String.format("%.0f k€", scpi.getInvested() / 100000.0),
-                (int)((float) scpi.getInvested() / (float) scpiManager.getTotalInvested() * 100.0),
-                scpi.getAverageMonthlyDistribution() == 0 ? "" : String.format("%.2f €",  scpi.getAverageMonthlyDistribution() / 100.0),
-                scpi.getYearlyYield() == 0 ? "" : (String.format("%.2f %%", scpi.getYearlyYield() * 100)),
-                scpi.getBreakEven(),
-                scpi.getRealYearlyYield() == 0 ? "" : String.format("%.2f %%", scpi.getRealYearlyYield() * 100)
-            ));
+                    " %5d │ %-29s │ %7s │ %3d %% │ %17s │ %14s │ %9s │ %14s \u001B[0m│",
+                    i++,
+                    investmentService.getInvestment().getOrganism() + ' ' + investmentService.getInvestment().getName(),
+                    String.format("%.0f k€", investmentService.getInvested() / 100000.0),
+                    (int) ((float) investmentService.getInvested() / (float) portfolioService.getInvestmentServices()
+                            .stream().mapToInt(InvestmentService::getInvested).sum() * 100.0),
+                    investmentService.getAverageMonthlyDistribution() == 0 ? ""
+                            : String.format("%.2f €", investmentService.getAverageMonthlyDistribution() / 100.0),
+                    investmentService.getYearlyYield() == 0 ? ""
+                            : (String.format("%.2f %%", investmentService.getYearlyYield() * 100)),
+                    investmentService.getBreakEven(),
+                    investmentService.getRealYearlyYield() == 0 ? ""
+                            : String.format("%.2f %%", investmentService.getRealYearlyYield() * 100)));
         }
-        System.out.println("├───────┼───────────────────────────────┼─────────┼───────┼───────────────────┼────────────────┼───────────┼────────────────┤");
-        System.out.println(String.format(
-            "│       │ %-29s │ %7s │       │ %17s │ %14s │  en mois  │ %14s │",
-            "Toutes les SCPI",
-            String.format("%.0f k€", scpiManager.getTotalInvested() / 100000.0),
-            scpiManager.getAverageMonthlyTotalDistribution() == 0 ? "" : String.format("%.2f €",  scpiManager.getAverageMonthlyTotalDistribution() / 100.0),
-            scpiManager.getTotalYearlyYield() == 0 ? "" : String.format("%.2f %%", scpiManager.getTotalYearlyYield() * 100),
-            String.format("%.2f %%", scpiManager.getTotalRealYearlyYield() * 100)
-        ));
-    System.out.println("\u001B[0m" + "└───────┴───────────────────────────────┴─────────┴───────┴───────────────────┴────────────────┴───────────┴────────────────┘");
-    }    
-
+        System.out.println(
+                "├───────┼───────────────────────────────┼─────────┼───────┼───────────────────┼────────────────┼───────────┼────────────────┤");
+        try {
+            System.out.println(String.format(
+                    "│       │ %-29s │ %7s │       │ %17s │ %14s │  en mois  │ %14s │",
+                    "Toutes les SCPI",
+                    String.format("%.0f k€",
+                            portfolioService.getInvestmentServices().stream().mapToInt(InvestmentService::getInvested)
+                                    .sum() / 100000.0),
+                    portfolioService.getAverageMonthlyTotalDistribution() == 0 ? ""
+                            : String.format("%.2f €", portfolioService.getAverageMonthlyTotalDistribution() / 100.0),
+                    portfolioService.getTotalYearlyYield() == 0 ? ""
+                            : String.format("%.2f %%", portfolioService.getTotalYearlyYield() * 100.0),
+                    String.format("%.2f %%", portfolioService.getTotalRealYearlyYield() * 100.0)));
+        } catch (Exception e) {
+            System.out.println("Problème\n" + e.getMessage());
+        }
+        System.out.println("\u001B[0m"
+                + "└───────┴───────────────────────────────┴─────────┴───────┴───────────────────┴────────────────┴───────────┴────────────────┘");
+    }
 
     private static String userInput(String prompt, Set<String> range) {
         String choice = "";
         do {
-        System.out.println("\n" + prompt);
+            System.out.println("\n" + prompt);
             try {
                 choice = s.nextLine().toLowerCase();
-                if (!range.contains(choice)) throw new IOException();
+                if (!range.contains(choice))
+                    throw new IOException();
             } catch (Exception e) {
                 System.out.println("Erreur de saisie.");
             }
