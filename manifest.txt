@@ -1,2 +1,2 @@
-Main-Class: eu.carayon.App
+Main-Class: eu.carayon.myInvestments.MyinvestmentsApplication
 Class-Path: lib/Gson.jar

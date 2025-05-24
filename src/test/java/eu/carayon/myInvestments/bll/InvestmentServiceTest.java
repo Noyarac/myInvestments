@@ -2,6 +2,8 @@ package eu.carayon.myInvestments.bll;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -10,6 +12,8 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import eu.carayon.myInvestments.bll.EventService;
+import eu.carayon.myInvestments.bll.InvestmentService;
 import eu.carayon.myInvestments.bo.Event;
 import eu.carayon.myInvestments.bo.EventType;
 import eu.carayon.myInvestments.bo.Investment;
